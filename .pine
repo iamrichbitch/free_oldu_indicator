@@ -1,0 +1,90 @@
+//@version=5
+indicator("FREE_oldu", overlay=true, max_labels_count=500)
+
+// Get user settings
+showBuySell       = input(true, "Show Buy & Sell", group="BUY & SELL SIGNALS")
+sensitivity       = input.float(3, "Sensitivity (1-6)", 1, 6, group="BUY & SELL SIGNALS")
+percentStop       = input.float(1, "Stop Loss % (0 to Disable)", 0, group="BUY & SELL SIGNALS")
+offsetSignal      = input.float(5, "Signals Offset", 0, group="BUY & SELL SIGNALS")
+showRibbon        = input(true, "Show Trend Ribbon", group="TREND RIBBON")
+smooth1           = input.int(5, "Smoothing 1", 1, group="TREND RIBBON")
+smooth2           = input.int(8, "Smoothing 2", 1, group="TREND RIBBON")
+showReversal      = input(true, "Show Reversals", group="REVERSAL SIGNALS")
+showPdHlc         = input(false, "Show P.D H/L/C", group="PREVIOUS DAY HIGH LOW CLOSE")
+lineColor         = input.color(color.yellow, "Line Colors", group="PREVIOUS DAY HIGH LOW CLOSE")
+lineWidth         = input.int(1, "Width Lines", group="PREVIOUS DAY HIGH LOW CLOSE")
+lineStyle         = input.string("Solid", "Line Style", ["Solid", "Dashed", "Dotted"])
+labelSize         = input.string("normal", "Label Text Size", ["small", "normal", "large"])
+labelColor        = input.color(color.yellow, "Label Text Colors")
+showEmas          = input(false, "Show EMAs", group="EMA")
+srcEma1           = input(close, "Source EMA 1")
+lenEma1           = input.int(7, "Length EMA 1", 1)
+srcEma2           = input(close, "Source EMA 2")
+lenEma2           = input.int(21, "Length EMA 2", 1)
+srcEma3           = input(close, "Source EMA 3")
+lenEma3           = input.int(144, "Length EMA 3", 1)
+showSwing         = input(false, "Show Swing Points", group="SWING POINTS")
+prdSwing          = input.int(10, "Swing Point Period", 2, group="SWING POINTS")
+colorPos          = input(color.new(color.green, 50), "Positive Swing Color")
+colorNeg          = input(color.new(color.red, 50), "Negative Swing Color")
+
+// Additional settings for sensitivity and trend filtering
+useRSI            = input(true, "Use RSI for Trend Filtering", group="TREND FILTERS")
+rsiPeriod         = input.int(14, "RSI Period", 1, group="TREND FILTERS")
+rsiOverbought     = input.int(70, "RSI Overbought Level", 50, 100, group="TREND FILTERS")
+rsiOversold       = input.int(30, "RSI Oversold Level", 0, 50, group="TREND FILTERS")
+
+useATR            = input(true, "Use ATR for Volatility Filtering", group="TREND FILTERS")
+atrPeriod         = input.int(14, "ATR Period", 1, group="TREND FILTERS")
+atrMultiplier     = input.float(2.0, "ATR Multiplier", 0.1, 5.0, group="TREND FILTERS")
+
+//------------------- Calculations -------------------//
+// RSI Calculation for filtering
+rsi = ta.rsi(close, rsiPeriod)
+
+// ATR Calculation for volatility filtering
+atr = ta.atr(atrPeriod)
+
+// Trend filtering conditions
+isTrending = (rsi < rsiOverbought and rsi > rsiOversold)
+isVolatile = (atr > atrMultiplier * ta.atr(atrPeriod))
+
+// EMA calculations
+ema1 = ta.ema(srcEma1, lenEma1)
+ema2 = ta.ema(srcEma2, lenEma2)
+ema3 = ta.ema(srcEma3, lenEma3)
+
+// Swing points
+highSwing = ta.highest(prdSwing)
+lowSwing = ta.lowest(prdSwing)
+
+// Buy/Sell Signals (more sensitivity)
+bull = ta.crossover(ema1, ema2) and isTrending and isVolatile
+bear = ta.crossunder(ema1, ema2) and isTrending and isVolatile
+
+plotshape(series=bull, title="Buy Signal", location=location.belowbar, color=color.green, style=shape.labelup, size=size.normal)
+plotshape(series=bear, title="Sell Signal", location=location.abovebar, color=color.red, style=shape.labeldown, size=size.normal)
+
+// Ribbon plotting
+ribbon1 = ta.sma(close, smooth1)
+ribbon2 = ta.sma(close, smooth2)
+
+plot(showRibbon ? ribbon1 : na, "Ribbon 1", color=color.blue)
+plot(showRibbon ? ribbon2 : na, "Ribbon 2", color=color.red)
+
+// Alerts
+alert01 = ta.crossover(ribbon1, ribbon2)
+alert02 = bull
+alert03 = ta.crossover(highSwing, close)
+alert04 = ta.crossover(lowSwing, close)
+alert05 = bear
+
+alerts(sym) =>
+    if alert02 or alert03 or alert04 or alert05
+        alert_text = alert02 ? "Buy Signal" : alert03 ? "Strong Buy Signal" : alert04 ? "Strong Sell Signal" : "Sell Signal"
+        alert(alert_text,  alert.freq_once_per_bar_close)
+
+// Alert conditions
+alertcondition(alert01, "Ribbon Crossover", "Blue and Red Ribbon Crossover")
+alertcondition(alert02, "Buy Signal", "Bullish Signal Detected")
+alertcondition(alert05, "Sell Signal", "Bearish Signal Detected")
